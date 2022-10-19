@@ -25,13 +25,36 @@ FUSIONAUTH_HOST_IP = os.environ.get("FUSIONAUTH_HOST_IP", "localhost")
 FUSIONAUTH_HOST_PORT = os.environ.get("FUSIONAUTH_HOST_PORT", "9011")
 
 
+client = FusionAuthClient(API_KEY, f"http://{FUSIONAUTH_HOST_IP}:{FUSIONAUTH_HOST_PORT}")
 templates = Jinja2Templates(directory='templates')
+
+"""
+Any callback / redirect URLs must be specified in the "Authorized Redirect URLs" for the
+application OAuth config in FusionAuth.
+
+Be aware of trailing slash issues when configuring these URLs. E.g. Flask's url_for
+will include a trailing slash here on `url_for("index")`
+"""
+
+def fusionauth_register_url(code_challenge, scope="offline_access"):
+    """offline_access scope is specified in order to recieve a refresh token."""
+    callback = urllib.parse.quote_plus("http://localhost:8000%s" % app.url_path_for("oauth_callback"))
+    return f"http://{FUSIONAUTH_HOST_IP}:{FUSIONAUTH_HOST_PORT}/oauth2/register?client_id={CLIENT_ID}&response_type=code&code_challenge={code_challenge}&code_challenge_method=S256&scope={scope}&redirect_uri={callback}"
 
 
 def fusionauth_login_url(code_challenge, scope="offline_access"):
     """offline_access scope is specified in order to recieve a refresh token."""
     callback = urllib.parse.quote_plus("http://localhost:8000%s" % app.url_path_for("oauth_callback"))
     return f"http://{FUSIONAUTH_HOST_IP}:{FUSIONAUTH_HOST_PORT}/oauth2/authorize?client_id={CLIENT_ID}&response_type=code&code_challenge={code_challenge}&code_challenge_method=S256&scope={scope}&redirect_uri={callback}"
+
+
+def fusionauth_logout_url():
+    """
+    Alternatively to specifying the `post_logout_redirect_uri`, set the Logout URL in
+    the application configuration OAuth tab.
+    """
+    redir = urllib.parse.quote_plus("http://localhost:8000%s" % app.url_path_for("homepage"))
+    return f"http://{FUSIONAUTH_HOST_IP}:{FUSIONAUTH_HOST_PORT}/oauth2/logout?client_id={CLIENT_ID}&post_logout_redirect_uri={redir}"
 
 
 def render(template, context=None):
@@ -44,6 +67,17 @@ async def homepage(request):
     return render('index.html', {'request': request})
 
 
+def register(request):
+    """To use registration, enable self-service registration in the Registration tab of
+    the application configuration in FusionAuth. You may also want to enable specific
+    registration properties such as First Name and Last Name to be passed into the
+    User constructor.
+    """
+    code_verifier, code_challenge = pkce.generate_pkce_pair()
+    request.session["code_verifier"] = code_verifier
+    return RedirectResponse(fusionauth_register_url(code_challenge))
+
+
 async def login(request):
     code_verifier, code_challenge = pkce.generate_pkce_pair()
     # save the verifier in session to send it later to the token endpoint
@@ -51,8 +85,23 @@ async def login(request):
     return RedirectResponse(url=fusionauth_login_url(code_challenge))
 
 
+def logout(request):
+    revoke_resp = client.revoke_refresh_tokens_by_application_id(CLIENT_ID)
+    # TODO: should we check for success?
+    # IMPORTANT: For the access token especially, if we do not delete it from
+    # the session, the user will still be logged in for the duration of the token's
+    # lifetime, which is specified by the application's "JWT duration" setting in
+    # FusionAuth. FusionAuth does not provide a way to invalidate the access token.
+    # See [RFC 7009](https://github.com/FusionAuth/fusionauth-issues/issues/201)
+    if "access_token" in request.session:
+        del request.session["access_token"]
+    if "refresh_token" in request.session:
+        del request.session["refresh_token"]
+    return RedirectResponse(url=fusionauth_logout_url())
+
+
 def oauth_callback(request):
-    request.user = UnauthenticatedUser()
+    #request.user = UnauthenticatedUser()
     if "access_token" in request.session:
         del request.session["access_token"]
     if "refresh_token" in request.session:
@@ -60,13 +109,14 @@ def oauth_callback(request):
     if not request.query_params.get("code"):
         return render(
             "error.html", dict(
+            request=request,
             msg="Failed to get auth token.",
-            reason=request.args["error_reason"],
-            description=request.args["error_description"])
+            reason=request.query_params["error_reason"],
+            description=request.query_params["error_description"])
         )
-    uri = app.url_path_for("oauth_callback")
+    uri = "http://localhost:8000%s" % app.url_path_for("oauth_callback")
     tok_resp = client.exchange_o_auth_code_for_access_token_using_pkce(
-        request.args.get("code"),
+        request.query_params.get("code"),
         uri,
         request.session['code_verifier'],
         CLIENT_ID,
@@ -75,6 +125,7 @@ def oauth_callback(request):
     if not tok_resp.was_successful():
         return render(
             "error.html", dict(
+            request=request,
             msg="Failed to get auth token.",
             reason=tok_resp.error_response["error_reason"],
             description=tok_resp.error_response["error_description"])
@@ -88,28 +139,32 @@ def oauth_callback(request):
     if not user_resp.was_successful():
         return render(
             "error.html", dict(
+            request=request,
             msg="Failed to get user info.",
             reason=tok_resp.error_response["error_reason"],
             description=tok_resp.error_response["error_description"])
         )
     registrations = user_resp.success_response["user"]["registrations"]
-    if not user_is_registered(registrations):
+    if not backends.user_is_registered(registrations):
         return render(
             "error.html", dict(
+            request=request,
             msg="User not registered for this application.",
             reason="Application id not found in user object.",
             description="Did you create a registration for this user and this application?")
         )
-    request.user = User(**user_resp.success_response["user"])
+    #request.user = User(**user_resp.success_response["user"])
     request.session["access_token"] = access_token
     request.session["refresh_token"] = refresh_token
-    return redirect("/")
+    return RedirectResponse(url="/")
 
 
 
 routes = [
     Route('/', endpoint=homepage),
+    Route('/register', endpoint=register),
     Route('/login', endpoint=login),
+    Route('/logout', endpoint=logout),
     Route('/oauth-callback', endpoint=oauth_callback),
     Mount('/static', StaticFiles(directory='static'), name='static')
 ]

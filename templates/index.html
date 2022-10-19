@@ -1,13 +1,52 @@
-<html>
-<head>
-</head>
-<body>
+{% extends "base.html" %}
 
-<h1>FusionAuth Starlette example</h1>
+{% block content %}
 
-authenticated {{ request.user.is_authenticated }}
+{% if request.user.is_authenticated %}
 
-<a href="{{ request.url_for('login') }}">Login</a>
+    <h1 style="color: blue;">Logged In</h1>
+    <p>Your user id: {{request.user.user_id}}</p>
+    <p>Your user id/email: {{request.user.email}}</p>
+    <p>Your user was created at: {{request.user.created_at}}</p>
+    <p>Your user was updated at: {{request.user.updated_at}}</p>
+    <p>You last logged in at: {{request.user.last_login}}</p>
+    <p>Your password was last updated at: {{request.user.pwd_updated_at}}</p>
+    <p>Password change required: {{request.user.pwd_change_required}}</p>
+    <div>
+     <button type="submit" id="logout_button">Logout</button>
+    </div>
 
-</body>
-</html>
+    <script type="text/javascript">
+      document.getElementById("logout_button").onclick = function () {
+        location.href = "{{ request.url_for('logout') }}";
+      };
+    </script>
+{% else %}
+
+    <h1 style="color: blue;">Login</h1>
+    <table>
+      <tr>
+        <td>
+          <div>
+            <button type="submit" id="login_button">Login</button>
+          </div>
+	</td>
+	<td>
+          <div>
+            <button type="submit" id="register_button">Register</button>
+	  </div>
+	</td>
+      </tr>
+    </table>
+
+    <script type="text/javascript">
+      document.getElementById("login_button").onclick = function () {
+          location.href = "{{ request.url_for('login') }}";
+      };
+      document.getElementById("register_button").onclick = function () {
+	      location.href = "{{ request.url_for('register') }}";
+      };
+    </script>
+{% endif %}
+
+{% endblock %}

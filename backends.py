@@ -14,6 +14,12 @@ FUSIONAUTH_HOST_PORT = os.environ.get("FUSIONAUTH_HOST_PORT", "9011")
 client = FusionAuthClient(API_KEY, f"http://{FUSIONAUTH_HOST_IP}:{FUSIONAUTH_HOST_PORT}")
 
 
+def user_is_registered(registrations, app_id=CLIENT_ID):
+    return all([
+        registrations is not None,
+        len(registrations) > 0,
+        any(r["applicationId"] == app_id and not "deactivated" in r["roles"] for r in registrations)])
+
 
 ### User object
 
@@ -54,8 +60,8 @@ class User:
 class SessionAuthBackend(AuthenticationBackend):
 
     async def authenticate(self, request):
-        #user = UnauthenticatedUser()
-        #creds = []
+        user = UnauthenticatedUser()
+        creds = []
         access_token = request.session.get("access_token")
         refresh_token = request.session.get("refresh_token")
         if access_token:
