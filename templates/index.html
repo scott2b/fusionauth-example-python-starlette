@@ -7,5 +7,7 @@
 
 authenticated {{ request.user.is_authenticated }}
 
+<a href="{{ request.url_for('login') }}">Login</a>
+
 </body>
 </html>

@@ -1,4 +1,18 @@
+import os
 from starlette.authentication import AuthenticationBackend, AuthCredentials
+from fusionauth.fusionauth_client import FusionAuthClient
+import pkce
+
+
+API_KEY = os.environ["FUSIONAUTH_API_KEY"]
+CLIENT_ID = os.environ["FUSIONAUTH_CLIENT_ID"]
+CLIENT_SECRET = os.environ["FUSIONAUTH_CLIENT_SECRET"]
+FUSIONAUTH_HOST_IP = os.environ.get("FUSIONAUTH_HOST_IP", "localhost")
+FUSIONAUTH_HOST_PORT = os.environ.get("FUSIONAUTH_HOST_PORT", "9011")
+
+
+client = FusionAuthClient(API_KEY, f"http://{FUSIONAUTH_HOST_IP}:{FUSIONAUTH_HOST_PORT}")
+
 
 
 ### User object
@@ -40,8 +54,8 @@ class User:
 class SessionAuthBackend(AuthenticationBackend):
 
     async def authenticate(self, request):
-        user = UnauthenticatedUser()
-        creds = []
+        #user = UnauthenticatedUser()
+        #creds = []
         access_token = request.session.get("access_token")
         refresh_token = request.session.get("refresh_token")
         if access_token:
