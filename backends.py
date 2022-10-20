@@ -1,6 +1,8 @@
 import os
 from starlette.authentication import AuthenticationBackend, AuthCredentials
 from fusionauth.fusionauth_client import FusionAuthClient
+from starsessions import load_session
+from starsessions.session import regenerate_session_id
 import pkce
 
 
@@ -60,13 +62,17 @@ class User:
 class SessionAuthBackend(AuthenticationBackend):
 
     async def authenticate(self, request):
+        await load_session(request)
         user = UnauthenticatedUser()
         creds = []
         access_token = request.session.get("access_token")
         refresh_token = request.session.get("refresh_token")
         if access_token:
             user_resp = client.retrieve_user_using_jwt(access_token)
+            if user_resp.was_successful():
+                print("SUCCESS WITH access token")
             if not user_resp.was_successful() and refresh_token:
+                print("NOT SUCCSSFUL ACCESS TOKEN. ATTEMPTING REFRESH")
                 token_resp = client.exchange_refresh_token_for_access_token(
                     refresh_token,
                     client_id=CLIENT_ID,
