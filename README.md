@@ -81,3 +81,10 @@ explored, but also probably won't until I see usable OAuth and SSO workflows.
 As noted in the comments: the `logout` call to the API does not really seem to do
 anything even when the refresh token is explicitly passed for revocation. Instead,
 revoke refresh tokens explicitly via a call to `revoke_refresh_token` as shown.
+
+### Apache license
+
+I tend to reach for MIT in most of my projects, but for no particular reason. I have
+attached an Apache license to this because there are bound to be some lingering
+copy-pastes from the [Flask example](https://github.com/FusionAuth/fusionauth-example-python-flask)
+which started me on this journey and which uses the Apache license.
