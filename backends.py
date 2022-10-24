@@ -69,10 +69,7 @@ class SessionAuthBackend(AuthenticationBackend):
         refresh_token = request.session.get("refresh_token")
         if access_token:
             user_resp = client.retrieve_user_using_jwt(access_token)
-            if user_resp.was_successful():
-                print("SUCCESS WITH access token")
             if not user_resp.was_successful() and refresh_token:
-                print("NOT SUCCSSFUL ACCESS TOKEN. ATTEMPTING REFRESH")
                 token_resp = client.exchange_refresh_token_for_access_token(
                     refresh_token,
                     client_id=CLIENT_ID,

@@ -2,12 +2,6 @@
 
 {% block content %}
 
-<form action="/login-form" method="POST">
-  <input type="text" name="email" />
-  <input type="text" name="password" />
-  <input type="submit" />
-</form>
-
 {% if request.user.is_authenticated %}
 
     <h1 style="color: blue;">Logged In</h1>
