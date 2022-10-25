@@ -13,6 +13,7 @@ from starsessions.session import regenerate_session_id
 from store import FilesystemStore
 import backends
 
+
 """
 Use FusionAuth's OAuth authentication with caution. There seem to be several known
 issues. Some of these are spelled out more explicitly in this branch of a fork of the
@@ -36,7 +37,8 @@ locked down. The fixes presented here are mitigating workarounds at best. My cur
 solution is to only use FusionAuth's login API until I better understand how FusionAuth
 is meant to be used securely.
 """
-USE_OAUTH = False
+USE_OAUTH = False # whether ot use oauth for initial auth. Ongoing session management via tokens is controlled by USE_TOKENS
+USE_TOKENS = backends.USE_TOKENS
 
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "supersecret__changeme")
@@ -193,8 +195,12 @@ async def login_form(request):
             description="Did you create a registration for this user and this application?")
         )
     #request.user = User(**user_resp.success_response["user"])
-    request.session["access_token"] = data["token"]
-    request.session["refresh_token"] = data["refreshToken"]
+
+    if USE_TOKENS:
+        request.session["access_token"] = data["token"]
+        request.session["refresh_token"] = data["refreshToken"]
+    else:
+        request.session["user_id"] = data["user"]["id"]
     return RedirectResponse(url="/", status_code=303)
 
 
@@ -213,8 +219,9 @@ async def logout(request):
         # tries to download an empty file called single-logout.
         # See: https://fusionauth.io/community/forum/topic/2209/logout-triggers-a-file-download-in-firefox?_=1666224554722
         await load_session(request)
-        revoke_resp = client.revoke_refresh_token(request.session["refresh_token"])
-        request.session.clear() # delete the tokens
+        if USE_TOKENS:
+            revoke_resp = client.revoke_refresh_token(request.session["refresh_token"])
+        request.session.clear() # delete the tokens if used, otherwise deletes the user_id
         return RedirectResponse(url=fusionauth_logout_url())
     else:
         await load_session(request)
@@ -225,8 +232,9 @@ async def logout(request):
         # access token revocation. Wrt the refresh token, this is almost certainly a bug.
         #
         # Thus, we call revoke_refresh_token directly.
-        revoke_resp = client.revoke_refresh_token(request.session["refresh_token"])
-        request.session.clear() # delete the tokens
+        if USE_TOKENS:
+            revoke_resp = client.revoke_refresh_token(request.session["refresh_token"])
+        request.session.clear() # delete the tokens or the user_id
         # Note the access token, if leaked, will still be valid at this point until it
         # times out. By design, FusionAuth does not provide a mechanism for revoking access tokens.
         return RedirectResponse("/")
@@ -267,10 +275,11 @@ async def oauth_callback(request):
             description=tok_resp.error_response["error_description"])
         )
     access_token = tok_resp.success_response["access_token"]
-    refresh_token = tok_resp.success_response.get("refresh_token")
-    assert refresh_token is not None, 'To receive a refresh token, be sure to enable ' \
-        '"Generate Refresh Tokens" for the app, and specify `scope=offline_access` in '\
-        'the request to the authorize endpoint.'
+    if USE_TOKENS:
+        refresh_token = tok_resp.success_response.get("refresh_token")
+        assert refresh_token is not None, 'To receive a refresh token, be sure to enable ' \
+            '"Generate Refresh Tokens" for the app, and specify `scope=offline_access` in '\
+            'the request to the authorize endpoint.'
     user_resp = client.retrieve_user_using_jwt(access_token)
     if not user_resp.was_successful():
         return render(
@@ -289,8 +298,11 @@ async def oauth_callback(request):
             reason="Application id not found in user object.",
             description="Did you create a registration for this user and this application?")
         )
-    request.session["access_token"] = access_token
-    request.session["refresh_token"] = refresh_token
+    if USE_TOKENS:
+        request.session["access_token"] = access_token
+        request.session["refresh_token"] = refresh_token
+    else:
+        request.session["user_id"] = user_resp.success_response["user"]["id"] 
     return RedirectResponse(url="/")
 
 

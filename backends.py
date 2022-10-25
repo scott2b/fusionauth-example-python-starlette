@@ -12,6 +12,7 @@ CLIENT_SECRET = os.environ["FUSIONAUTH_CLIENT_SECRET"]
 FUSIONAUTH_HOST_IP = os.environ.get("FUSIONAUTH_HOST_IP", "localhost")
 FUSIONAUTH_HOST_PORT = os.environ.get("FUSIONAUTH_HOST_PORT", "9011")
 
+USE_TOKENS = False # False to fetch the user directly from the api instead of using the access and refresh tokens
 
 client = FusionAuthClient(API_KEY, f"http://{FUSIONAUTH_HOST_IP}:{FUSIONAUTH_HOST_PORT}")
 
@@ -65,33 +66,46 @@ class SessionAuthBackend(AuthenticationBackend):
         await load_session(request)
         user = UnauthenticatedUser()
         creds = []
-        access_token = request.session.get("access_token")
-        refresh_token = request.session.get("refresh_token")
-        if access_token:
-            user_resp = client.retrieve_user_using_jwt(access_token)
-            if not user_resp.was_successful() and refresh_token:
-                token_resp = client.exchange_refresh_token_for_access_token(
-                    refresh_token,
-                    client_id=CLIENT_ID,
-                    client_secret=CLIENT_SECRET)
-                if token_resp.was_successful():
-                    access_token = token_resp.success_response["access_token"]
-                    refresh_token = token_resp.success_response["refresh_token"]
-                    request.session["access_token"] = access_token
-                    request.session["refresh_token"] = refresh_token
-                else:
-                    access_token = None
-                    refresh_token = None
-            if access_token is not None:
+
+        if USE_TOKENS:
+            access_token = request.session.get("access_token")
+            refresh_token = request.session.get("refresh_token")
+            if access_token:
                 user_resp = client.retrieve_user_using_jwt(access_token)
-                if user_resp.was_successful():
-                    registrations = user_resp.success_response["user"]["registrations"]
-                    if user_is_registered(registrations):
-                        user = User(**user_resp.success_response["user"])
-                    else: # The user registration may have been administratively deleted
-                        pass
-            creds = ["app_auth"]
-            #if user.superuser:
-            #    creds.append("admin_auth")
+                if not user_resp.was_successful() and refresh_token:
+                    token_resp = client.exchange_refresh_token_for_access_token(
+                        refresh_token,
+                        client_id=CLIENT_ID,
+                        client_secret=CLIENT_SECRET)
+                    if token_resp.was_successful():
+                        access_token = token_resp.success_response["access_token"]
+                        refresh_token = token_resp.success_response["refresh_token"]
+                        request.session["access_token"] = access_token
+                        request.session["refresh_token"] = refresh_token
+                    else:
+                        access_token = None
+                        refresh_token = None
+                if access_token is not None:
+                    user_resp = client.retrieve_user_using_jwt(access_token)
+                    if user_resp.was_successful():
+                        registrations = user_resp.success_response["user"]["registrations"]
+                        if user_is_registered(registrations):
+                            user = User(**user_resp.success_response["user"])
+                        else: # The user registration may have been administratively deleted
+                            pass
+                creds = ["app_auth"]
+                #if user.superuser:
+                #    creds.append("admin_auth")
+        else:
+            # Fetch the user directly from the API.
+            user_id = request.session.get("user_id")
+            if user_id:
+                user_resp = client.retrieve_user(user_id)
+                registrations = user_resp.success_response["user"]["registrations"]
+                if user_is_registered(registrations):
+                    user = User(**user_resp.success_response["user"])
+                else: # The user registration may have been administratively deleted
+                    pass
+                
         return AuthCredentials(creds), user
 

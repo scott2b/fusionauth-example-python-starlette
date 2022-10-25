@@ -1,6 +1,57 @@
 # fusionauth-example-python-starlette
 Example FusionAuth client application demonstrating user registration and authentication
 
+## Update
+
+I have introduced a `USE_TOKENS=False` setting which implements a revised workflow that
+mitigates a lot of the previous complexity in session managment. This affects both
+OAuth and form-based authentication flows because the previous implementation used
+access and refresh tokens on the backend to handle retrieving user info within the
+request cycle.
+
+This new approach tracks the user ID in the session in lieu of the OAuth tokens, then
+fetches the user info in the backend directly via the API rather than by an access
+request. As such, the following changes are enabled when use tokens is set to False:
+
+- No need to enable refresh token generation or scope in the application configuration
+- The access token is only used for initial authentication, thus having a very short lifecycle and JWTs can be configured with a short timeout accordingly.
+- JWTs are never exposed to the session. Only the user ID is exposed to the session store, therefore Starlette's internal session implementation should suffice.
+- Nothing needs to be revoked at logout. For form-based (backend API based) authentication, nothing beyond the standard application logout process is required. For OAuth based authentication, you will want to forward the user to FusionAuth's logout (although I recommend disabling "Keep me signed in" -- see below).
+
+
+### Disable "Keep me signed in"
+
+As far as I can tell, there is no benefit or utility really to the "Keep me signed in"
+checkbox in the FusionAuth login form. I suppose the benefit might be for admins who
+actually have a need to access FusionAuth itself, but I do not see a way to pass that
+information back to the application -- thus it seems like this option would only serve
+to confuse standard users. I recommend disabling the option for this workflow. To do this:
+
+Create a custom theme if you have not already, then delete the following segment from
+the theme's "OAuth authorize" template:
+
+```
+         [@helpers.input id="rememberDevice" type="checkbox" name="rememberDevice" label=theme.message('remember-device') value="true" uncheckedValue="false"]
+            <i class="fa fa-info-circle" data-tooltip="${theme.message('{tooltip}remember-device')}"></i>[#t/]
+          [/@helpers.input]
+```
+
+Note that if you do not have a FusionAuth license which enables multi-tenant themes,
+you will need to apply the custom theme to the tenant rather than directly on the application.
+
+
+### Alternative workflows
+
+I have not investigated workflows relevant to, e.g., single-page apps or mobile apps.
+These types of applications often hold onto access tokens on the client side and issue
+authentication requests directly from the client. I do not recommend these types of
+workflows with FusionAuth for the simple reason that irrevocable JWTs are issued as the
+access tokens. For more information about why this is a problem, see [This blog post](http://cryto.net/~joepie91/blog/2016/06/13/stop-using-jwt-for-sessions/)
+and the [flow chart here](http://cryto.net/%7Ejoepie91/blog/2016/06/19/stop-using-jwt-for-sessions-part-2-why-your-solution-doesnt-work/).
+If you need this functionality, I recommend keeping an eye on [FusionAuth RFC 7009](https://github.com/FusionAuth/fusionauth-issues/issues/201)
+and upvoting it for implementation of access token revocability.
+
+
 ## Installation
 
 ```

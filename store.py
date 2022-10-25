@@ -30,10 +30,12 @@ class FilesystemStore(SessionStore):
         """ Read session data from a data source using session_id. """
         #return self._storage.get(session_id, {})
         f = self.session_file(session_id)
-        if f.exists():
-            return json.load(f.open())
-        else:
-            return {}
+        try:
+            if f.exists():
+                return json.load(f.open())
+        except OSError: # happens if a lingering session cookie from Starlette's builtin sessions results in filename too long
+            pass
+        return {}
 
     async def write(self, session_id: str, data: Dict, lifetime: int, ttl: int) -> str:
         """ Write session data into data source and return session id. """
