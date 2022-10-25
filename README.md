@@ -36,7 +36,7 @@ the theme's "OAuth authorize" template:
           [/@helpers.input]
 ```
 
-Note that if you do not have a FusionAuth license which enables multi-tenant themes,
+Note that if you do not have a FusionAuth license which enables application-specific themes,
 you will need to apply the custom theme to the tenant rather than directly on the application.
 
 
