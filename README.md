@@ -42,6 +42,7 @@ minimally include:
 - Stop using JWTs for access tokens
 - Ability to revoke all tokens, (access and refresh) for a given user -- preferrably on a per-application basis.
 - Demonstrable administrative authentication revocation workflow which does not respawn deleted users or user registrations due to lingering tokens or sessions.
+- Fixing of whatever it is that causes Firefox to initiate downloading of a file during logout.
 
 Note: I have not even begun to explore SSO, which I suspect is prone to some of the
 same issues as FusionAuth's builtin OAuth.
